@@ -114,7 +114,7 @@ PKG <- c(
   "readxl",
   "stringr",
   "stringi",
-  "akgfmaps", # RACE-GAP Specific # devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
+  # "akgfmaps", # RACE-GAP Specific # devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
   "pingr", # check website links
   "httr", # check website links
   "flextable" # making pretty tables
@@ -196,31 +196,31 @@ boundaries <- data.frame(lon = c(-153, -152), # c(-180, -140)
 
 ## Inport Groundfish Bottom Trawl Survey shapefiles (akgfmaps) -----------------
 
-shp_ebs <- akgfmaps::get_base_layers(select.region = "bs.south", set.crs = "auto")
-shp_nbs <- akgfmaps::get_base_layers(select.region = "bs.north", set.crs = "auto")
-shp_ai <- akgfmaps::get_base_layers(select.region = "ai", set.crs = "auto")
-shp_ai$survey.strata$Stratum <- shp_ai$survey.strata$STRATUM
-shp_goa <- akgfmaps::get_base_layers(select.region = "goa", set.crs = "auto")
-shp_goa$survey.strata$Stratum <- shp_goa$survey.strata$STRATUM
-shp_bss <- akgfmaps::get_base_layers(select.region = "ebs.slope", set.crs = "auto")
-
-shp_all <- dplyr::bind_rows(list(
-  shp_ebs$survey.area %>%
-                    sf::st_transform(crs = crs_out) %>%
-    dplyr::mutate(SURVEY = "EBS"),
-  shp_nbs$survey.area %>%
-    sf::st_transform(crs = crs_out) %>%
-    dplyr::mutate(SURVEY = "NBS"),
-  shp_ai$survey.area %>%
-    sf::st_transform(crs = crs_out) %>%
-    dplyr::mutate(SURVEY = "AI"),
-  shp_goa$survey.area %>%
-    sf::st_transform(crs = crs_out) %>%
-    dplyr::mutate(SURVEY = "GOA"),
-  shp_bss$survey.area %>%
-                    sf::st_transform(crs = crs_out) %>%
-    dplyr::mutate(SURVEY = "BSS"))) %>%
-  dplyr::select(Survey = SURVEY, geometry)
+# shp_ebs <- akgfmaps::get_base_layers(select.region = "bs.south", set.crs = "auto")
+# shp_nbs <- akgfmaps::get_base_layers(select.region = "bs.north", set.crs = "auto")
+# shp_ai <- akgfmaps::get_base_layers(select.region = "ai", set.crs = "auto")
+# shp_ai$survey.strata$Stratum <- shp_ai$survey.strata$STRATUM
+# shp_goa <- akgfmaps::get_base_layers(select.region = "goa", set.crs = "auto")
+# shp_goa$survey.strata$Stratum <- shp_goa$survey.strata$STRATUM
+# shp_bss <- akgfmaps::get_base_layers(select.region = "ebs.slope", set.crs = "auto")
+# 
+# shp_all <- dplyr::bind_rows(list(
+#   shp_ebs$survey.area %>%
+#                     sf::st_transform(crs = crs_out) %>%
+#     dplyr::mutate(SURVEY = "EBS"),
+#   shp_nbs$survey.area %>%
+#     sf::st_transform(crs = crs_out) %>%
+#     dplyr::mutate(SURVEY = "NBS"),
+#   shp_ai$survey.area %>%
+#     sf::st_transform(crs = crs_out) %>%
+#     dplyr::mutate(SURVEY = "AI"),
+#   shp_goa$survey.area %>%
+#     sf::st_transform(crs = crs_out) %>%
+#     dplyr::mutate(SURVEY = "GOA"),
+#   shp_bss$survey.area %>%
+#                     sf::st_transform(crs = crs_out) %>%
+#     dplyr::mutate(SURVEY = "BSS"))) %>%
+#   dplyr::select(Survey = SURVEY, geometry)
 
 
 ## wrangle data for plot funsies -----------------------------------------------
