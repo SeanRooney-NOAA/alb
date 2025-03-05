@@ -1,8 +1,9 @@
 # Importing data from OTN to ACTEL
-
 getwd() #check working directory 
 
 # Load libraries ---------------------------------------------------------------
+remotes::install_github("hugomflavio/actel", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
+#install.packages("actel")
 library(tidyverse) # Tidyverse (data cleaning and arrangement)
 library(actel)
 library(lubridate)# Lubridate - same group as Tidyverse, improves the process of creating date objects
@@ -10,6 +11,7 @@ library(readr) # #read_csv() is from tidyverse's readr package --> you can also 
 library(ggmap)# GGmap - complimentary to ggplot2, which is in the Tidyverse
 library(sp) #SP and Raster packages for mapping.
 library(raster)
+#devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
 
 # Importing data- import files into R ------------------------------------------
 # (minimum requirement are biomentric, spatial,deployment, and detentions to use the preload() function. Optionalfiles include Distance matrix and Spatial.txt)
@@ -62,39 +64,48 @@ str(deployments)
 raw_detections <- readr::read_csv("data/alb_matched_detections_2021.csv", guess_max=60000) 
 
 detections_otn<-dplyr::select(raw_detections, "receiver","codespace","tagname", "sensorraw", "sensorunit","datecollected", "sensorname") |> 
-mutate(receiver = as.character(receiver),
+  mutate(receiver = as.character(receiver),
          codespace = as.character(codespace),
-           tagname = as.character(tagname),
+         tagname = as.character(tagname),
          sensorraw = as.character(sensorraw),
          sensorunit = as.character(sensorunit), 
          datecollected = ymd_hms(raw_detections$datecollected),
-         Signal = stringr::str_extract(sensorname, "(?<=-)[^-]*$") #Use this instead of actel's function to extract the signals: as.numeric(stringr::str_extract(COLUMN, "(?<=-)[^-]*"))
-        
-)
-        
+         Signal = as.integer(stringr::str_extract(sensorname, "(?<=-)[^-]*$")) #Use this instead of actel's function to extract the signals: as.numeric(stringr::str_extract(COLUMN, "(?<=-)[^-]*"))
+         
+  ) |>
+  filter(!is.na(Signal)) #So trying to convert Signal from Char to Intiger and then remove the NA's 
+
 str(detections_otn)
 head(detections_otn)
 
-## Distances matrix: ----------------------------------------------------------
 
+## Distances matrix: ----------------------------------------------------------
+#Needs to be developed
+
+#A distances matrix is a table that contains information on the distance (in metres) between every pair of spatial elements the study area 
+#Matrix is symmetric (i.e. the entries of the matrix are symmetric with respect to the main diagonal).
+#The diagonal line is composed of 0's as it represents the distance between an element and itself.
+#Must have at least one release site, and the names of the release sites must be identical to those in your 'spatial.csv' and your 'biometrics.csv'.
+
+#To avoid doing this manually, you can get R to do it for you. Here's what you need:
+# A shapefile with a land polygon of your study area.The coordinates of your receivers and release sites in the same coordinate system as the shapefile.
+
+## Distances matrix: ----------------------------------------------------------
+dot_string <- 
+  "A -- C -- D -- E -- F
+A -- B -- C
+D -- F"
+dot <- readDot(string = dot_string)
+plotDot(dot)
 
 ## Preload data ----------------------------------------------------------------
+#OlsonNames(tzdir = NULL) # Use following to get list: OlsonNames(tzdir = NULL),so local is: US/Alaska
 
 # Now that we have the R objects created, we can run preload:
-#x <- preload(biometrics = bio, deployments = deployments, spatial = spatial,
-#'  detections = detections, dot = dot, tz = "Europe/Copenhagen")
-#'  
-#'  
-#'  
-#'  
-#'  
-#'  
-#'  
-#'  
-#'  
-#'  
-#'  
+x <- preload(biometrics = biometric, deployments = deployments, spatial = spatial, detections = detections_otn, dot = dot, tz = "UTC") 
 
+recoverLog(file="actel_job_log.txt", overwrite = TRUE)
+read.table("actel_job_log.txt", stringsAsFactors = F, header = T)
 # Map --------------------------------------------------------------------------
 
 PKG <- c(
@@ -130,6 +141,8 @@ for (p in PKG) {
     }
     require(p,character.only = TRUE)}
 }
+
+devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
 
 ## Define CRS ------------------------------------------------------------------
 
@@ -319,5 +332,4 @@ ggplot2::coord_sf(xlim = boundaries$X,
   )
 
 
-p21
 
