@@ -1,23 +1,46 @@
 # Importing data from OTN to ACTEL
 getwd() #check working directory 
 
-# Load libraries ---------------------------------------------------------------
-remotes::install_github("hugomflavio/actel", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
-#devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
+# Install and Load libraries ---------------------------------------------------
 
-library(tidyverse) # Tidyverse (data cleaning and arrangement)
-library(actel)
-library(lubridate)# Lubridate - same group as Tidyverse, improves the process of creating date objects
-library(readr) # #read_csv() is from tidyverse's readr package --> you can also use read.csv() from base R but it created a dataframe (not tibble) so loads slower
-library(ggmap)# GGmap - complimentary to ggplot2, which is in the Tidyverse
-library(sp) #SP and Raster packages for mapping.
-library(raster)
-library(gWidgets2tcltk)
-library(RSP)
-library(patchwork)
+PKG <- c(
+  
+  "devtools",
+  "remotes", 
+  
+  "here",
+  "actel", # remotes::install_github("hugomflavio/actel", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
+  "lubridate", # Lubridate - same group as Tidyverse, improves the process of creating date objects
+  "readr", # read_csv() is from tidyverse's readr package --> you can also use read.csv() from base R but it created a dataframe (not tibble) so loads slower
+  "sf", 
+  "sp", # SP and Raster packages for mapping.
+  "ggmap", # GGmap - complimentary to ggplot2, which is in the Tidyverse
+  "raster",
+  "gWidgets2tcltk",
+  "dplyr",
+  "magrittr",
+  "RSP", # remotes::install_github("YuriNiella/RSP", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
+  "stringr",
+  "stringi",
+  # "akgfmaps", # RACE-GAP Specific # devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
+  "patchwork", 
+  "gdistance"
+)
 
-# Installing packages:
-#remotes::install_github("YuriNiella/RSP", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
+PKG <- unique(PKG)
+for (p in PKG) {
+  if(!require(p,character.only = TRUE)) {
+    if (p == "akgfmaps") {
+      devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
+    } else if (p == "actel") {
+      remotes::install_github("hugomflavio/actel", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
+    } else if (p == "RSP") {
+      remotes::install_github("YuriNiella/RSP", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
+    } else {
+      install.packages(p)
+    }
+    require(p,character.only = TRUE)}
+}
 
 # Importing data- import files into R ------------------------------------------
 # (minimum requirement are biomentric, spatial,deployment, and detentions to use the preload() function. Optionalfiles include Distance matrix and Spatial.txt)
@@ -36,17 +59,17 @@ biometric <- read_csv("data/biometric.csv")
 biometric$Signal <- as.integer(biometric$Signal)
 
 ## Spatial file: --------------------------------------------------------------
- ##This file should include both station deployment sites and release sites. It is essential that this table has the following columns:
-  ##Station.name: The name of the station will be used to match the receiver deployments.
-  
-##Array:
-    #- If you are listing a station: The array to which the station belongs.
-    #- If you are listing a release site: The first array(s) that the animal is expected to cross after being released.
-    #Note: The release sites must have exactly the same names in the biometrics table and in the spatial table. If there is a mismatch, actel will stop.
- 
- #Section: The study area section to which the hydrophone station belongs. Leave empty for the release sites.
+##This file should include both station deployment sites and release sites. It is essential that this table has the following columns:
+##Station.name: The name of the station will be used to match the receiver deployments.
 
-  #Type: The nature of the item you are listing. You must choose between "Hydrophone" or "Release".
+##Array:
+#- If you are listing a station: The array to which the station belongs.
+#- If you are listing a release site: The first array(s) that the animal is expected to cross after being released.
+#Note: The release sites must have exactly the same names in the biometrics table and in the spatial table. If there is a mismatch, actel will stop.
+
+#Section: The study area section to which the hydrophone station belongs. Leave empty for the release sites.
+
+#Type: The nature of the item you are listing. You must choose between "Hydrophone" or "Release".
 # Let's load the spatial file individually, so we can have a look at it.
 
 spatial <- read_csv("data/spatial.csv")
@@ -64,17 +87,23 @@ head(deployments)
 ## Detentions: -----------------------------------------------------------------
 raw_detections <- readr::read_csv("data/alb_matched_detections_2021.csv", guess_max=60000) 
 
-detections_otn<-dplyr::select(raw_detections, "receiver","codespace","tagname", "sensorraw", "sensorunit","datecollected", "sensorname") |> 
-  mutate(Receiver = as.character(receiver),
-         CodeSpace = as.character(codespace),
-         tagname = as.character(tagname),
-         Sensor.Value = as.character(sensorraw),
-         Sensor.Unit = as.character(sensorunit), 
-         Timestamp = raw_detections$datecollected,
-         Signal = as.integer(stringr::str_extract(sensorname, "(?<=-)[^-]*$")) #Use this instead of actel's function to extract the signals: as.numeric(stringr::str_extract(COLUMN, "(?<=-)[^-]*"))
-         
+detections_otn <- raw_detections %>% 
+  # dplyr::filter(receiver != "release") %>%
+  dplyr::select("receiver","codespace","tagname", "sensorraw", "sensorunit","datecollected", "sensorname") |> 
+  dplyr::mutate(
+    Receiver = ifelse(receiver == "release", 0, receiver),
+    Receiver = as.integer(Receiver),
+    CodeSpace = as.character(codespace),
+    tagname = as.character(tagname),
+    Sensor.Value = sensorraw,
+    # Sensor.Value = as.character(sensorraw),
+    Sensor.Unit = as.character(sensorunit), 
+    Timestamp = datecollected,
+    Signal = as.integer(stringr::str_extract(sensorname, "(?<=-)[^-]*$")) #Use this instead of actel's function to extract the signals: as.numeric(stringr::str_extract(COLUMN, "(?<=-)[^-]*"))
+    
   ) |>
   filter(!is.na(Signal)) #So trying to convert Signal from Char to Intiger and then remove the NA's 
+
 
 str(detections_otn)
 head(detections_otn)
@@ -92,28 +121,28 @@ plotDot(dot)
 
 # check if R can run the distance functions
 #aux <- c(
-  #length(suppressWarnings(packageDescription("raster"))),
-  #length(suppressWarnings(packageDescription("gdistance"))),
-  #length(suppressWarnings(packageDescription("sp"))),
-  #length(suppressWarnings(packageDescription("terra"))))
+#length(suppressWarnings(packageDescription("raster"))),
+#length(suppressWarnings(packageDescription("gdistance"))),
+#length(suppressWarnings(packageDescription("sp"))),
+#length(suppressWarnings(packageDescription("terra"))))
 
 #missing.packages <- sapply(aux, function(x) x == 1)
 
 #if (any(missing.packages)) {
- # message("Sorry, this function requires packages '",
-        #  paste(c("raster", "gdistance", "sp", "terra")[missing.packages], collapse = "', '"),
-        #  "' to operate. Please install ", ifelse(sum(missing.packages) > 1, "them", "it"),
-        #  " before proceeding.")
+# message("Sorry, this function requires packages '",
+#  paste(c("raster", "gdistance", "sp", "terra")[missing.packages], collapse = "', '"),
+#  "' to operate. Please install ", ifelse(sum(missing.packages) > 1, "them", "it"),
+#  " before proceeding.")
 #} else {
-  # Fetch actel's example shapefile
-  #example.shape <- paste0(system.file(package = "actel")[1], "/example_shapefile.shp")
-  
-  # import the shape file
-  #x <- shapeToRaster(shape = example.shape, size = 20)
-  
-  # have a look at the resulting raster,
-  # where the blank spaces are the land areas
-  #terra::plot(x)
+# Fetch actel's example shapefile
+#example.shape <- paste0(system.file(package = "actel")[1], "/example_shapefile.shp")
+
+# import the shape file
+#x <- shapeToRaster(shape = example.shape, size = 20)
+
+# have a look at the resulting raster,
+# where the blank spaces are the land areas
+#terra::plot(x)
 #}
 #rm(aux, missing.packages)
 
@@ -165,7 +194,7 @@ plotDot(dot)
 
 #Imports the shapefile and use the spatial.csv file to check the extents.
 water <- shapeToRaster(shape = "data/ALB_WGS1984.shp", spatial = "data/spatial.csv",  
-                             coord.x = "Longitude", coord.y = "Latitude", size = 2)
+                       coord.x = "Longitude", coord.y = "Latitude", size = 2)
 
 # Let's use RSP's plotRaster function to confirm everything is looking good.
 RSP::plotRaster(spatial, water, coord.x = "Longitude", coord.y = "Latitude")
@@ -176,11 +205,13 @@ tl <- transitionLayer(water)
 # We are ready to try it out! distances Matrix will automatically search for a "spatial.csv"
 # file in the current directory, so remember to keep that file up to date!
 
-dist.mat <- distancesMatrix(tl, coord.x = "Longitude", coord.y = "Latitude")
+dist.mat <- distancesMatrix(t.layer = tl, coord.x = "Longitude", coord.y = "Latitude")
+y
+y
+y
 
 # have a look at it:
 dist.mat
-
 
 ## Distances matrix: ----------------------------------------------------------
 #Needs to be developed
@@ -209,7 +240,7 @@ x <- preload(biometrics = biometric, deployments = deployments, spatial = spatia
 results <- explore(datapack = x)
 
 #To generate results for residence analysis:
-  
+
 results <- residency(datapack = x)
 
 
@@ -229,9 +260,9 @@ explore(tz, max.interval = 60, minimum.detections = 2, start.time = NULL, stop.t
         detections.y.axis = c("stations", "arrays"))
 # Map --------------------------------------------------------------------------
 
-#PKG <- c(
+PKG <- c(
   
- # "devtools",
+  "devtools",
   
   "ggplot2", # Create Elegant Data Visualizations Using the Grammar of Graphics
   "scales", # nicer labels in ggplot2
@@ -273,15 +304,15 @@ devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
 ## Get world map ---------------------------------------------------------------
 
 #world_coordinates <- maps::map("world", plot = FALSE, fill = TRUE) %>% 
-  #sf::st_as_sf() %>%
-  # sf::st_union() %>% 
-  sf::st_transform(crs = crs_out) %>% 
+#sf::st_as_sf() %>%
+# sf::st_union() %>% 
+sf::st_transform(crs = crs_out) %>% 
   dplyr::filter(ID %in% c("USA", "Russia", "Canada")) %>% 
   dplyr::mutate(ID = ifelse(ID == "USA", "Alaska", ID))
 
 ## Get place labels for map ----------------------------------------------------
 
-#place_labels <- data.frame(
+place_labels <- data.frame(
   type = c("islands", "islands", "islands", "islands", 
            "mainland", "mainland", "mainland", 
            "convention line", "peninsula", 
@@ -411,18 +442,18 @@ ggplot2::geom_sf(data = world_coordinates,
 #     geometry = geometry), 
 #   alpha = 0.7,
 #   linewidth = 2) + 
-  ggplot2::geom_sf(
-    data = dat,
-    mapping = aes(
-      shape = Section,
-      color = Type,
-      geometry = geometry),
-    alpha = 0.7,
-    size = 3) +
-#   ggplot2::facet_wrap(~date) +
+ggplot2::geom_sf(
+  data = dat,
+  mapping = aes(
+    shape = Section,
+    color = Type,
+    geometry = geometry),
+  alpha = 0.7,
+  size = 3) +
+  #   ggplot2::facet_wrap(~date) +
   ggplot2::scale_color_viridis_d(name = "Type", option = "D", begin = .2, end = .8) +
-#   ggplot2::ggtitle(label = "Juvenile Grenider Modeled ROMS Dispersal", 
-#                    subtitle = "At different depths, years, and environmental conditions") + 
+  #   ggplot2::ggtitle(label = "Juvenile Grenider Modeled ROMS Dispersal", 
+  #                    subtitle = "At different depths, years, and environmental conditions") + 
   ggplot2::scale_shape_discrete(name = "Section",
                                 na.value = NA,
                                 na.translate = FALSE) +
