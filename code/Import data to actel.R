@@ -3,7 +3,8 @@ getwd() #check working directory
 
 # Load libraries ---------------------------------------------------------------
 remotes::install_github("hugomflavio/actel", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
-#install.packages("actel")
+#devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
+
 library(tidyverse) # Tidyverse (data cleaning and arrangement)
 library(actel)
 library(lubridate)# Lubridate - same group as Tidyverse, improves the process of creating date objects
@@ -11,15 +12,19 @@ library(readr) # #read_csv() is from tidyverse's readr package --> you can also 
 library(ggmap)# GGmap - complimentary to ggplot2, which is in the Tidyverse
 library(sp) #SP and Raster packages for mapping.
 library(raster)
-#devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
+library(gWidgets2tcltk)
+library(RSP)
+library(patchwork)
+
+# Installing packages:
+#remotes::install_github("YuriNiella/RSP", build_opts = c("--no-resave-data", "--no-manual"), build_vignettes = TRUE)
 
 # Importing data- import files into R ------------------------------------------
 # (minimum requirement are biomentric, spatial,deployment, and detentions to use the preload() function. Optionalfiles include Distance matrix and Spatial.txt)
 
 ## Time format: ----------------------------------------------------------------
 # All dates will be supplied to Actel in this format:
-
-actel_datefmt = '%Y-%m-%d %H:%M:%S'
+#actel_datefmt = '%Y-%m-%d %H:%M:%S'
 
 ## Biometric file: -------------------------------------------------------------
 
@@ -28,12 +33,9 @@ actel_datefmt = '%Y-%m-%d %H:%M:%S'
 ##Signal: Corresponds to the code emitted by your tags. If you are unsure as to what signals are, you should ask the tag manufacturer more about the differences between code spaces and signals.
 
 biometric <- read_csv("data/biometric.csv")
-
-head(biometric)
-str(biometric)
+biometric$Signal <- as.integer(biometric$Signal)
 
 ## Spatial file: --------------------------------------------------------------
-
  ##This file should include both station deployment sites and release sites. It is essential that this table has the following columns:
   ##Station.name: The name of the station will be used to match the receiver deployments.
   
@@ -45,31 +47,30 @@ str(biometric)
  #Section: The study area section to which the hydrophone station belongs. Leave empty for the release sites.
 
   #Type: The nature of the item you are listing. You must choose between "Hydrophone" or "Release".
+# Let's load the spatial file individually, so we can have a look at it.
 
 spatial <- read_csv("data/spatial.csv")
 head(spatial)
-str(spatial)
 
 ## Deployments file: -----------------------------------------------------------
 
-  #Receiver: The serial number of the receiver. If a receiver was retrieved and re-deployed, you should add extra rows for each deployment.
-  #Station.name: The name of the station where the receiver was deployed. It must match one of the station names in the spatial file.
-  #Start and Stop: The times when the receiver was deployed and when the receiver was retrieved, respectively. Must be in a yyyy-mm-dd hh:mm:ss format. Note that these timestamps must be in the local time zone of the study area, which you will later supply in the tz argument
+#Receiver: The serial number of the receiver. If a receiver was retrieved and re-deployed, you should add extra rows for each deployment.
+#Station.name: The name of the station where the receiver was deployed. It must match one of the station names in the spatial file.
+#Start and Stop: The times when the receiver was deployed and when the receiver was retrieved, respectively. Must be in a yyyy-mm-dd hh:mm:ss format. Note that these timestamps must be in the local time zone of the study area, which you will later supply in the tz argument
 
 deployments <- read_csv("data/deployments.csv")
 head(deployments)
-str(deployments)
 
 ## Detentions: -----------------------------------------------------------------
 raw_detections <- readr::read_csv("data/alb_matched_detections_2021.csv", guess_max=60000) 
 
 detections_otn<-dplyr::select(raw_detections, "receiver","codespace","tagname", "sensorraw", "sensorunit","datecollected", "sensorname") |> 
-  mutate(receiver = as.character(receiver),
-         codespace = as.character(codespace),
+  mutate(Receiver = as.character(receiver),
+         CodeSpace = as.character(codespace),
          tagname = as.character(tagname),
-         sensorraw = as.character(sensorraw),
-         sensorunit = as.character(sensorunit), 
-         datecollected = ymd_hms(raw_detections$datecollected),
+         Sensor.Value = as.character(sensorraw),
+         Sensor.Unit = as.character(sensorunit), 
+         Timestamp = raw_detections$datecollected,
          Signal = as.integer(stringr::str_extract(sensorname, "(?<=-)[^-]*$")) #Use this instead of actel's function to extract the signals: as.numeric(stringr::str_extract(COLUMN, "(?<=-)[^-]*"))
          
   ) |>
@@ -77,6 +78,108 @@ detections_otn<-dplyr::select(raw_detections, "receiver","codespace","tagname", 
 
 str(detections_otn)
 head(detections_otn)
+
+## Distances matrix: ----------------------------------------------------------
+dot_string <- 
+  "A -- C -- D -- E -- F
+A -- B -- C
+D -- F"
+dot <- readDot(string = dot_string)
+plotDot(dot)
+
+##____________________________________________________
+#Trouble shooting next step: to create distance matrix
+
+# check if R can run the distance functions
+#aux <- c(
+  #length(suppressWarnings(packageDescription("raster"))),
+  #length(suppressWarnings(packageDescription("gdistance"))),
+  #length(suppressWarnings(packageDescription("sp"))),
+  #length(suppressWarnings(packageDescription("terra"))))
+
+#missing.packages <- sapply(aux, function(x) x == 1)
+
+#if (any(missing.packages)) {
+ # message("Sorry, this function requires packages '",
+        #  paste(c("raster", "gdistance", "sp", "terra")[missing.packages], collapse = "', '"),
+        #  "' to operate. Please install ", ifelse(sum(missing.packages) > 1, "them", "it"),
+        #  " before proceeding.")
+#} else {
+  # Fetch actel's example shapefile
+  #example.shape <- paste0(system.file(package = "actel")[1], "/example_shapefile.shp")
+  
+  # import the shape file
+  #x <- shapeToRaster(shape = example.shape, size = 20)
+  
+  # have a look at the resulting raster,
+  # where the blank spaces are the land areas
+  #terra::plot(x)
+#}
+#rm(aux, missing.packages)
+
+##That appears to work so now try a minimal example
+# move to a temporary directory to avoid
+# overwriting local files
+#old.wd <- getwd()
+#setwd(tempdir())
+
+# Fetch the location of actel's example files
+#aux <- system.file(package = "actel")[1]
+
+# deploy the example spatial.csv file
+#file.copy(paste0(aux, "/example_spatial.csv"), "spatial.csv")
+
+# import the example shapefile and use the spatial.csv file to check
+# the extents.
+#base.raster <- shapeToRaster(shape = paste0(aux, "/example_shapefile.shp"), 
+#                             coord.x = "x", coord.y = "y", size = 20)
+
+# You can have a look at the resulting raster by running
+#raster::plot(base.raster)
+# There should be two small islands in the bottom left area
+
+# Build the transition layer
+#t.layer <- transitionLayer(base.raster)
+
+# compile the distances matrix. Columns x and y in the spatial dataframe
+# contain the coordinates of the stations and release sites.
+#dist.mat <- distancesMatrix(t.layer, coord.x = 'x', coord.y = 'y')
+
+# check out the output:
+#dist.mat
+
+# And return to your old working directory once done :)
+#setwd(old.wd)
+#rm(old.wd)
+
+##Ok this appears to work, so back to my own data
+
+##_____________________________________________________
+# When doing the following steps, it is imperative that the coordinate reference 
+# system (CRS) of the shapefile and of the points in the spatial file are the same.
+
+# NOTE: If necessary, change the 'path' to the folder where you have the shape file.
+# loadShape will rasterize the input shape, using the "size" argument as a reference for the pixel size. 
+# Note: The units of the "size" will be the same as the units of the shapefile projection 
+#(i.e. metres for metric projections, and degrees for latlong systems)
+
+#Imports the shapefile and use the spatial.csv file to check the extents.
+water <- shapeToRaster(shape = "data/ALB_WGS1984.shp", spatial = "data/spatial.csv",  
+                             coord.x = "Longitude", coord.y = "Latitude", size = 2)
+
+# Let's use RSP's plotRaster function to confirm everything is looking good.
+RSP::plotRaster(spatial, water, coord.x = "Longitude", coord.y = "Latitude")
+
+# Now we need to create a transition layer, which R will use to estimate the distances
+tl <- transitionLayer(water)
+
+# We are ready to try it out! distances Matrix will automatically search for a "spatial.csv"
+# file in the current directory, so remember to keep that file up to date!
+
+dist.mat <- distancesMatrix(tl, coord.x = "Longitude", coord.y = "Latitude")
+
+# have a look at it:
+dist.mat
 
 
 ## Distances matrix: ----------------------------------------------------------
@@ -99,18 +202,36 @@ dot <- readDot(string = dot_string)
 plotDot(dot)
 
 ## Preload data ----------------------------------------------------------------
-#OlsonNames(tzdir = NULL) # Use following to get list: OlsonNames(tzdir = NULL),so local is: US/Alaska
 
 # Now that we have the R objects created, we can run preload:
-x <- preload(biometrics = biometric, deployments = deployments, spatial = spatial, detections = detections_otn, dot = dot, tz = "UTC") 
+x <- preload(biometrics = biometric, deployments = deployments, spatial = spatial, detections = detections_otn, dot = dot_string, tz = "UTC") #OlsonNames(tzdir = NULL) # Use following to get list: OlsonNames(tzdir = NULL), so local is: US/Alaska
 
-recoverLog(file="actel_job_log.txt", overwrite = TRUE)
-read.table("actel_job_log.txt", stringsAsFactors = F, header = T)
+results <- explore(datapack = x)
+
+#To generate results for residence analysis:
+  
+results <- residency(datapack = x)
+
+
+#which(is.na(detections_otn$Timestamp))
+#detections_otn[which(is.na(detections_otn$Timestamp)), ]
+
+
+actel_explore_results.RData
+
+
+explore(tz, max.interval = 60, minimum.detections = 2, start.time = NULL, stop.time = NULL,
+        speed.method = c("last to first", "first to first"), speed.warning = NULL, 
+        speed.error = NULL, jump.warning = 2, jump.error = 3, inactive.warning = NULL, 
+        inactive.error = NULL, exclude.tags = NULL, override = NULL, report = FALSE, 
+        auto.open = TRUE, discard.orphans = FALSE, discard.first = NULL, discard.orphans = FALSE, 
+        save.detections = FALSE, GUI = c("needed", "always", "never"), save.tables.locally = FALSE,
+        detections.y.axis = c("stations", "arrays"))
 # Map --------------------------------------------------------------------------
 
-PKG <- c(
+#PKG <- c(
   
-  "devtools",
+ # "devtools",
   
   "ggplot2", # Create Elegant Data Visualizations Using the Grammar of Graphics
   "scales", # nicer labels in ggplot2
@@ -146,13 +267,13 @@ devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
 
 ## Define CRS ------------------------------------------------------------------
 
-crs_out <- "EPSG:3338"
-crs_in <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
+#crs_out <- "EPSG:3338"
+#crs_in <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
 
 ## Get world map ---------------------------------------------------------------
 
-world_coordinates <- maps::map("world", plot = FALSE, fill = TRUE) %>% 
-  sf::st_as_sf() %>%
+#world_coordinates <- maps::map("world", plot = FALSE, fill = TRUE) %>% 
+  #sf::st_as_sf() %>%
   # sf::st_union() %>% 
   sf::st_transform(crs = crs_out) %>% 
   dplyr::filter(ID %in% c("USA", "Russia", "Canada")) %>% 
@@ -160,7 +281,7 @@ world_coordinates <- maps::map("world", plot = FALSE, fill = TRUE) %>%
 
 ## Get place labels for map ----------------------------------------------------
 
-place_labels <- data.frame(
+#place_labels <- data.frame(
   type = c("islands", "islands", "islands", "islands", 
            "mainland", "mainland", "mainland", 
            "convention line", "peninsula", 
