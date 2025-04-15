@@ -214,9 +214,9 @@ y
 dist.mat
 
 ## Distances matrix: ----------------------------------------------------------
-#Needs to be developed
+# Needs to be developed
 
-#A distances matrix is a table that contains information on the distance (in metres) between every pair of spatial elements the study area 
+# A distances matrix is a table that contains information on the distance (in metres) between every pair of spatial elements the study area 
 #Matrix is symmetric (i.e. the entries of the matrix are symmetric with respect to the main diagonal).
 #The diagonal line is composed of 0's as it represents the distance between an element and itself.
 #Must have at least one release site, and the names of the release sites must be identical to those in your 'spatial.csv' and your 'biometrics.csv'.
@@ -235,20 +235,22 @@ plotDot(dot)
 ## Preload data ----------------------------------------------------------------
 
 # Now that we have the R objects created, we can run preload:
-x <- preload(biometrics = biometric, deployments = deployments, spatial = spatial, detections = detections_otn, dot = dot_string, tz = "UTC") #OlsonNames(tzdir = NULL) # Use following to get list: OlsonNames(tzdir = NULL), so local is: US/Alaska
-
+x <- preload(biometrics = biometric, 
+             deployments = deployments, 
+             spatial = spatial, 
+             detections = detections_otn, 
+             dot = dot_string, 
+             tz = "UTC") #OlsonNames(tzdir = NULL) # Use following to get list: OlsonNames(tzdir = NULL), so local is: US/Alaska
+c # enter at prompt
 results <- explore(datapack = x)
 
-#To generate results for residence analysis:
-
+# To generate results for residence analysis:
 results <- residency(datapack = x)
 
+# which(is.na(detections_otn$Timestamp))
+# detections_otn[which(is.na(detections_otn$Timestamp)), ]
 
-#which(is.na(detections_otn$Timestamp))
-#detections_otn[which(is.na(detections_otn$Timestamp)), ]
-
-
-actel_explore_results.RData
+# actel_explore_results.RData
 
 
 explore(tz, max.interval = 60, minimum.detections = 2, start.time = NULL, stop.time = NULL,
@@ -258,6 +260,18 @@ explore(tz, max.interval = 60, minimum.detections = 2, start.time = NULL, stop.t
         auto.open = TRUE, discard.orphans = FALSE, discard.first = NULL, discard.orphans = FALSE, 
         save.detections = FALSE, GUI = c("needed", "always", "never"), save.tables.locally = FALSE,
         detections.y.axis = c("stations", "arrays"))
+
+
+aaa <- c(list.files(path = ".", pattern = ".log.txt", full.names = FALSE), 
+         list.files(path = ".", pattern = ".RData", full.names = FALSE))
+dir0 <- paste0("output/", Sys.Date())
+dir.create(path = dir0)
+for (i in 1:length(aaa)) {
+  file.copy(from = paste0("./", aaa[i]), 
+            to = paste0(paste0(dir0, "/", aaa[i])))
+  file.remove(from = paste0("./", aaa[i]))
+}
+
 # Map --------------------------------------------------------------------------
 
 PKG <- c(
@@ -294,18 +308,16 @@ for (p in PKG) {
     require(p,character.only = TRUE)}
 }
 
-devtools::install_github("afsc-gap-products/akgfmaps", build_vignettes = TRUE)
-
 ## Define CRS ------------------------------------------------------------------
 
-#crs_out <- "EPSG:3338"
-#crs_in <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
+crs_out <- "EPSG:3338"
+crs_in <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
 
 ## Get world map ---------------------------------------------------------------
 
-#world_coordinates <- maps::map("world", plot = FALSE, fill = TRUE) %>% 
-#sf::st_as_sf() %>%
-# sf::st_union() %>% 
+world_coordinates <- maps::map("world", plot = FALSE, fill = TRUE) %>%
+sf::st_as_sf() %>%
+# sf::st_union() %>%
 sf::st_transform(crs = crs_out) %>% 
   dplyr::filter(ID %in% c("USA", "Russia", "Canada")) %>% 
   dplyr::mutate(ID = ifelse(ID == "USA", "Alaska", ID))
@@ -484,4 +496,4 @@ ggplot2::coord_sf(xlim = boundaries$X,
   )
 
 
-
+ggsave(filename = paste0(dir0, "/tag-locations.png"))
