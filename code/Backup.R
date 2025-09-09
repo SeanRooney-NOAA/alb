@@ -66,11 +66,11 @@ raw_detections <- readr::read_csv("data/alb_matched_detections_2021_9_9_2025.csv
 
 detections_otn<-dplyr::select(raw_detections, "receiver","codeSpace","tagName", "sensorValue", "sensorUnit","dateCollectedUTC", "sensorName") |> 
   mutate(Receiver = as.character(receiver),
-         codeSpace = as.character(codeSpace),
+         CodeSpace = as.character(codeSpace),
          tagName = as.character(tagName),
-         sensorValue = as.character(sensorValue),
-         sensorUnit = as.character(sensorUnit), 
-         dateCollectedUTC = ymd_hms(raw_detections$dateCollectedUTC),
+         Sensor.Value = as.character(sensorValue),
+         Sensor.Unit = as.character(sensorUnit), 
+         Timestamp = ymd_hms(raw_detections$dateCollectedUTC),
          Signal = as.integer(stringr::str_extract(sensorName, "(?<=-)[^-]*$")) #Use this instead of actel's function to extract the signals: as.numeric(stringr::str_extract(COLUMN, "(?<=-)[^-]*"))
          
   ) |>
